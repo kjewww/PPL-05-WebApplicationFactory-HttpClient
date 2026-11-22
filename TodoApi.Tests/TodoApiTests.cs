@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
 using TodoApi.Models;
@@ -52,102 +51,29 @@ public class TodoApiTests
         }
     }
 
-    // --- Routing & response dasar -------------------------------------------------
+    // --- Fokus 1: Routing ---------------------------------------------------------
 
-    [Test]
-    public async Task Get_Todos_Returns200_WithJsonContentType()
+    [TestCase("/todos", 200)]
+    [TestCase("/todos/1", 200)]
+    [TestCase("/todos/999", 404)]
+    [TestCase("/todos/abc", 404)] // route constraint {id:int}
+    public async Task Routing_Get_ReturnsExpectedStatus(string path, int expectedStatus)
     {
-        var response = await _client.GetAsync("/todos");
+        var response = await _client.GetAsync(path);
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/json"));
+        Assert.That((int)response.StatusCode, Is.EqualTo(expectedStatus));
     }
 
-    [Test]
-    public async Task Get_Todos_ReturnsSeededTodo()
+    // --- Fokus 2: Validasi --------------------------------------------------------
+
+    [TestCase("")]
+    [TestCase("ab")]
+    [TestCase("   ")]
+    public async Task Validation_InvalidTitle_Returns400_WithProblemJson(string title)
     {
-        var todos = await _client.GetFromJsonAsync<List<Todo>>("/todos");
-
-        Assert.That(todos, Is.Not.Null);
-        Assert.That(todos!.Count, Is.EqualTo(1));
-        Assert.That(todos[0].Title, Is.EqualTo("Todo awal"));
-    }
-
-    [Test]
-    public async Task Get_TodoById_ReturnsSeededTodo()
-    {
-        var todo = await _client.GetFromJsonAsync<Todo>("/todos/1");
-
-        Assert.That(todo, Is.Not.Null);
-        Assert.That(todo!.Id, Is.EqualTo(1));
-        Assert.That(todo.Title, Is.EqualTo("Todo awal"));
-        Assert.That(todo.IsDone, Is.False);
-    }
-
-    [Test]
-    public async Task Get_TodoById_UnknownId_Returns404()
-    {
-        var response = await _client.GetAsync("/todos/999");
-
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
-    }
-
-    [Test]
-    public async Task Get_TodoById_NonIntegerId_Returns404()
-    {
-        var response = await _client.GetAsync("/todos/abc");
-
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
-    }
-
-    // --- POST ---------------------------------------------------------------------
-
-    [Test]
-    public async Task Post_ValidTodo_Returns201_WithLocation()
-    {
-        var response = await _client.PostAsJsonAsync("/todos",
-            new { title = "Belajar factory", isDone = false });
-
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
-        Assert.That(response.Headers.Location?.ToString(), Is.EqualTo("/todos/2"));
-    }
-
-    [Test]
-    public async Task Post_ValidTodo_ReturnsCreatedTodo()
-    {
-        var response = await _client.PostAsJsonAsync("/todos",
-            new { title = "  Belajar factory  ", isDone = true });
-        var todo = await response.Content.ReadFromJsonAsync<Todo>();
-
-        Assert.That(todo, Is.Not.Null);
-        Assert.That(todo!.Title, Is.EqualTo("Belajar factory"));
-        Assert.That(todo.IsDone, Is.True);
-    }
-
-    [Test]
-    public async Task Post_EmptyTitle_Returns400()
-    {
-        var response = await _client.PostAsJsonAsync("/todos",
-            new { title = "", isDone = false });
+        var response = await _client.PostAsJsonAsync("/todos", new { title, isDone = false });
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-    }
-
-    [Test]
-    public async Task Post_ShortTitle_Returns400()
-    {
-        var response = await _client.PostAsJsonAsync("/todos",
-            new { title = "ab", isDone = false });
-
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-    }
-
-    [Test]
-    public async Task Post_InvalidTitle_ReturnsProblemJson_WithTitleError()
-    {
-        var response = await _client.PostAsJsonAsync("/todos",
-            new { title = "x", isDone = false });
-
         Assert.That(response.Content.Headers.ContentType?.MediaType,
             Is.EqualTo("application/problem+json"));
 
@@ -157,82 +83,89 @@ public class TodoApiTests
         Assert.That(problem!.Errors, Does.ContainKey("title"));
     }
 
-    [Test]
-    public async Task Post_EmptyBody_Returns400()
-    {
-        var response = await _client.PostAsync("/todos",
-            new StringContent(string.Empty, Encoding.UTF8, "application/json"));
+    // --- Fokus 3: Status code -----------------------------------------------------
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    [Test]
+    public async Task StatusCode_PostPutDelete_Returns201_204_204()
+    {
+        var post = await _client.PostAsJsonAsync("/todos",
+            new { title = "Status code", isDone = false });
+
+        Assert.That(post.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        Assert.That(post.Headers.Location, Is.Not.Null);
+
+        var put = await _client.PutAsJsonAsync("/todos/2",
+            new { title = "Diupdate", isDone = true });
+
+        Assert.That(put.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+
+        var delete = await _client.DeleteAsync("/todos/2");
+
+        Assert.That(delete.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
     }
 
-    // --- PUT ----------------------------------------------------------------------
+    // --- Fokus 4: Response body ---------------------------------------------------
 
     [Test]
-    public async Task Put_ExistingTodo_Returns204()
+    public async Task ResponseBody_Json_CanBeDeserialized()
     {
-        var response = await _client.PutAsJsonAsync("/todos/1",
-            new { title = "Todo selesai", isDone = true });
+        var listResponse = await _client.GetAsync("/todos");
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
-    }
+        Assert.That(listResponse.Content.Headers.ContentType?.MediaType,
+            Is.EqualTo("application/json"));
 
-    [Test]
-    public async Task Put_UnknownId_Returns404()
-    {
-        var response = await _client.PutAsJsonAsync("/todos/999",
-            new { title = "Todo selesai", isDone = true });
+        var todos = await listResponse.Content.ReadFromJsonAsync<List<Todo>>();
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
-    }
+        Assert.That(todos, Is.Not.Null);
+        Assert.That(todos!.Count, Is.EqualTo(1));
+        Assert.That(todos[0].Title, Is.EqualTo("Todo awal"));
 
-    [Test]
-    public async Task Put_InvalidTitle_Returns400()
-    {
-        var response = await _client.PutAsJsonAsync("/todos/1",
-            new { title = "", isDone = false });
-
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-    }
-
-    // --- DELETE --------------------------------------------------------------------
-
-    [Test]
-    public async Task Delete_ExistingTodo_Returns204()
-    {
-        var response = await _client.DeleteAsync("/todos/1");
-
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
-    }
-
-    [Test]
-    public async Task Delete_UnknownId_Returns404()
-    {
-        var response = await _client.DeleteAsync("/todos/999");
-
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
-    }
-
-    // --- Perubahan terlihat di request berikutnya ---------------------------------
-
-    [Test]
-    public async Task Post_ThenGetById_ReturnsCreatedTodo()
-    {
-        await _client.PostAsJsonAsync("/todos", new { title = "Dari test", isDone = false });
-
-        var todo = await _client.GetFromJsonAsync<Todo>("/todos/2");
+        var todo = await _client.GetFromJsonAsync<Todo>("/todos/1");
 
         Assert.That(todo, Is.Not.Null);
-        Assert.That(todo!.Title, Is.EqualTo("Dari test"));
+        Assert.That(todo!.Id, Is.EqualTo(1));
+        Assert.That(todo.IsDone, Is.False);
+
+        var post = await _client.PostAsJsonAsync("/todos",
+            new { title = "  Dibaca lagi  ", isDone = true });
+        var created = await post.Content.ReadFromJsonAsync<Todo>();
+
+        Assert.That(created, Is.Not.Null);
+        Assert.That(created!.Title, Is.EqualTo("Dibaca lagi"));
+        Assert.That(created.IsDone, Is.True);
     }
 
+    // --- Fokus 5: Persistence (tanpa akses DbContext) -----------------------------
+
     [Test]
-    public async Task Delete_ThenGetById_Returns404()
+    public async Task Persistence_PostGetDeleteGet()
     {
-        await _client.DeleteAsync("/todos/1");
+        // 1. POST: buat data baru.
+        var created = await _client.PostAsJsonAsync("/todos",
+            new { title = "Dari test", isDone = false });
 
-        var response = await _client.GetAsync("/todos/1");
+        Assert.That(created.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        // Pakai Location dari response, jangan hardcode "/todos/2".
+        var location = created.Headers.Location!.ToString();
+
+        // 2. GET: data baru harus terbaca dari server.
+        var get = await _client.GetAsync(location);
+
+        Assert.That(get.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        var todo = await get.Content.ReadFromJsonAsync<Todo>();
+
+        Assert.That(todo!.Title, Is.EqualTo("Dari test"));
+
+        // 3. DELETE: hapus data itu.
+        var delete = await _client.DeleteAsync(location);
+
+        Assert.That(delete.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+
+        // 4. GET lagi: data sudah tidak ada.
+        var afterDelete = await _client.GetAsync(location);
+
+        Assert.That(afterDelete.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
     }
 }
