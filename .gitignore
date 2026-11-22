@@ -1,0 +1,13 @@
+# Build output
+bin/
+obj/
+
+# SQLite database file (dibuat otomatis saat aplikasi dijalankan)
+*.db
+*.db-shm
+*.db-wal
+
+# IDE / editor
+.vs/
+.idea/
+*.user
