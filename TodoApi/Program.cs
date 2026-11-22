@@ -10,9 +10,9 @@ builder.Services.AddDbContext<TodoDbContext>(options =>
 
 var app = builder.Build();
 
-// Saat dijalankan normal, pastikan tabel ada dan ada 1 data awal.
-// Saat nanti dipasang test, environment "Testing" akan diset oleh factory
-// sehingga seed di bawah dilewati dan test yang mengatur datanya sendiri.
+// Pastikan tabel ada dan ada 1 data awal saat aplikasi dijalankan.
+// Environment "Testing" dilewati kalau nanti mau dipakai custom factory.
+// Integration test sekarang memakai DB sementara lewat env var ConnectionStrings__TodoDb.
 if (!app.Environment.IsEnvironment("Testing"))
 {
     using var scope = app.Services.CreateScope();
