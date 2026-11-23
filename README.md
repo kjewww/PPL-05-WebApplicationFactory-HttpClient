@@ -23,6 +23,20 @@ Pendekatan yang dipakai sengaja yang paling sederhana: **tanpa `ConfigureWebHost
 
 Hasil akhirnya: API dengan 5 endpoint, database SQLite persisten, dan **10 test case** yang semuanya hijau. Panduan resminya bisa dibaca di [Integration tests in ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/test/integration-tests?view=aspnetcore-10.0&pivots=nunit#introduction-to-integration-tests).
 
+### 1.1 Ringkasan kontrak API
+
+Semua endpoint memakai prefix `/todos` dan body JSON.
+
+| Method | Path | Status sukses | Catatan |
+|---|---|---|---|
+| `GET` | `/todos` | `200 OK` | Semua todo, diurutkan oleh `id` |
+| `GET` | `/todos/{id}` | `200 OK` | `404` jika id tidak ada/bukan integer |
+| `POST` | `/todos` | `201 Created` | Disertai header `Location: /todos/{id}` |
+| `PUT` | `/todos/{id}` | `204 No Content` | `400` jika title invalid, `404` jika id tidak ada |
+| `DELETE` | `/todos/{id}` | `204 No Content` | `404` jika id tidak ada |
+
+Detail request, response, skema `Todo`, validasi, dan contoh error ada di [docs/api.md](docs/api.md).
+
 ## 2. Persiapan Lingkungan
 
 Yang dibutuhkan:
